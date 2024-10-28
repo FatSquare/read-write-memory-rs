@@ -10,16 +10,6 @@ use serde_json;
 const SYSCALL_DATA: &str = include_str!("../data/syscall.json");
 
 /// `get_proc_by_id` will take a process id as `i32` and get the process with that id 
-/// 
-///
-/// # Examples
-///
-/// ```
-/// fn main() {
-///      let pid:i32 = 1234; // id of process 
-///      let pid = process_read_write::get_proc_by_id(pid);
-/// }
-/// ```
 pub fn get_proc_by_id(id: i32) -> Pid{
     Pid::from_raw(id)
 }
@@ -44,23 +34,8 @@ fn printsyscall(syscall_names:&HashMap<u64,String>,regs:nix::libc::user_regs_str
         regs.rax
      );
 } 
-/// `watch_proc` is used to monitor a process and get a real-time list of all the system calls it makes.
-/// 
-/// # Backend
-///
-/// this function invokes the `ptrace` syscall on specefic process
-/// 
-/// # Examples
-///
-/// ```
-/// use process_read_write;
-///
-/// fn main(){
-///     let pid = 1234;
-///     process_read_write::watch_proc(pid);
-/// }
-/// ```
 
+/// `watch_proc` is used to monitor a process and get a real-time list of all the system calls it makes.
 pub fn watch_proc(pid:i32){
     let syscall_names = syscalls_list();
     let childpid = Pid::from_raw(pid);
@@ -130,23 +105,6 @@ pub fn get_proc_by_name(process_name: &str) -> Pid{
 /// # Backend
 ///
 /// this function invokes the `process_vm_readv` syscall, enabling direct memory reading from a specified address in the target process.
-/// 
-/// # Examples
-///
-/// ```
-/// use process_read_write;
-///
-/// fn main(){
-///     let pid:i32 = 1234; // id of process 
-///     let addr:usize = 0x70eb856006c0; // address of value to read 
-///
-///     //let pid = get_proc_by_name("SomeRandomGame");
-///     let pid = process_read_write::get_proc_by_id(pid);
-///
-///     let health = process_read_write::read_addr(pid,addr,4);
-///     println!("READING MEMORY: {:?}",health);
-/// }
-/// ```
 pub fn read_addr(pid:Pid,addr:usize,length:usize) -> Result<Vec<u8>,Error>
 {
     let mut data: Vec<u8> = vec![0;length]; 
@@ -167,22 +125,6 @@ pub fn read_addr(pid:Pid,addr:usize,length:usize) -> Result<Vec<u8>,Error>
 ///
 /// this function invokes the `process_vm_writev` syscall, enabling direct memory writing into a specified address in the target process. 
 /// 
-/// # Examples
-///
-/// ```
-/// use process_read_write;
-///
-/// fn main(){
-///     let pid:i32 = 1234; // id of app
-///     let addr:usize = 0x70eb856006c0; // address of value to change
-///     let new_value = [0xff,0xff,0xff,0x7f]; // the value the insert into the new address
-///
-///     //let pid = process_read_write::get_proc_by_name("SomeRandomGame");
-///     let pid = process_read_write::get_proc_by_id(pid);
-///
-///     process_read_write::write_addr(pid,addr,&new_value);
-/// }
-/// ```
 pub fn write_addr(pid:Pid,addr:usize,data:&[u8]){
     let mut _data:&[u8] = data; 
     let local_iov = IoSlice::new(&mut _data);
