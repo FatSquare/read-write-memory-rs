@@ -1,4 +1,4 @@
-extern crate process_read_write;
+use process_read_write;
 
 fn main(){
     let pid = 1234;

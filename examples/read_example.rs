@@ -1,4 +1,4 @@
-extern crate process_read_write;
+use process_read_write;
 
 fn main(){
     let pid:i32 = 1234; // id of app

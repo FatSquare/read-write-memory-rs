@@ -5,9 +5,9 @@ use std::io::{IoSliceMut,IoSlice};
 use sysinfo::System;
 use std::collections::HashMap;
 use nix::{self,sys::wait::waitpid};
-use std::fs::File;
-use std::io::prelude::*;
 use serde_json;
+
+const SYSCALL_DATA: &str = include_str!("../data/syscall.json");
 
 pub fn get_proc_by_id(id: i32) -> Pid{
     Pid::from_raw(id)
@@ -15,10 +15,7 @@ pub fn get_proc_by_id(id: i32) -> Pid{
 
 fn syscalls_list() -> HashMap<u64,String>{
     let mut map = HashMap::new();
-    let mut file = File::open("/home/sqrt/source/rust/kernel_proc/process-read-write/syscall.json").expect("Cant find file syscall.json"); 
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    let parse: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    let parse: serde_json::Value = serde_json::from_str(&SYSCALL_DATA).unwrap();
     for sysobj in parse["aaData"].as_array().unwrap() {
         map.insert(sysobj[0].as_u64().unwrap(),sysobj[1].as_str().unwrap().to_string());
     }
@@ -26,7 +23,7 @@ fn syscalls_list() -> HashMap<u64,String>{
 }
 fn printsyscall(syscall_names:&HashMap<u64,String>,regs:nix::libc::user_regs_struct,i:usize) {
     let syscall_name = syscall_names.get(&regs.orig_rax).unwrap();
-    // if syscall_name.as_str() != "process_vm_readv" {return}
+    // use something like this if you wanna trigger an event only on specefic syscall `if syscall_name.as_str() != "process_vm_readv" {return}`
     eprint!("{} => ",i/2);
     eprintln!("{} ({},{:x},{:x},..) = {}",
         syscall_name,
@@ -36,10 +33,26 @@ fn printsyscall(syscall_names:&HashMap<u64,String>,regs:nix::libc::user_regs_str
         regs.rax
      );
 } 
+/// `watch_proc` is used to monitor a process and get a real-time list of all the system calls it makes.
+/// 
+/// # Backend
+///
+/// this function invokes the `ptrace` syscall on specefic process
+/// 
+/// # Examples
+///
+/// ```
+/// use process_read_write;
+///
+/// fn main(){
+///     let pid = 1234;
+///     process_read_write::watch_proc(pid);
+/// }
+/// ```
 
 pub fn watch_proc(pid:i32){
     let syscall_names = syscalls_list();
-    let childpid = nix::unistd::Pid::from_raw(pid);
+    let childpid = Pid::from_raw(pid);
     ptrace::attach(childpid).expect("cant attach to pid");
     let _ = waitpid(childpid,None).expect("timeout waiting for pid");
     let mut i = 0;
@@ -54,7 +67,24 @@ pub fn watch_proc(pid:i32){
     }
 }
 
-// maybe i should use pidof instead since its more accurate
+/// `get_proc_by_name` will take a name try to find a process with that name 
+/// 
+/// # Note 
+///
+/// this function will panic with an error message if it 0 or multipe process by that name were found. 
+/// planning to make so it returns Result<T,E>
+/// 
+/// # Examples
+///
+/// ```
+/// use process_read_write;
+/// use nix::unistd::Pid;
+///
+/// fn main(){
+///     let name = "MyGame-x86";
+///     let pid:Pid = process_read_write::get_proc_by_name(name);
+/// }
+/// ```
 pub fn get_proc_by_name(process_name: &str) -> Pid{
     let s = System::new_all();
     let pid:usize;
@@ -63,7 +93,7 @@ pub fn get_proc_by_name(process_name: &str) -> Pid{
         1 => pid = procs[0].pid().into(),
         0 => panic!("No process found!"),
         _ => {
-            println!("Multipe processes found!, please try get_pid(PID) instead");
+            println!("Multipe processes found!, please try get_proc_by_id(pid) instead");
             for proc in procs{
                 println!("{} => {}",proc.name(),proc.pid());
             }
@@ -75,7 +105,37 @@ pub fn get_proc_by_name(process_name: &str) -> Pid{
 }
 
 
-// process_vm_readv and process_vm_writev from libc which is implement by the linux kernel
+/// `read_addr` is used to read `n` bytes from a process `pid` and starting from `addr`
+/// 
+/// # Note
+///
+/// the function will return Result<T,E>
+///
+/// Error examples:
+/// - `EPERM`: make sure running as sudo
+/// - `ESRCH`: make sure the process exist
+/// - `ESFAULT`: make sure the address exist in the scope of the process 
+///
+/// # Backend
+///
+/// this function invokes the `process_vm_readv` syscall, enabling direct memory reading from a specified address in the target process.
+/// 
+/// # Examples
+///
+/// ```
+/// use process_read_write;
+///
+/// fn main(){
+///     let pid:i32 = 1234; // id of app
+///     let addr:usize = 0x70eb856006c0; // address of value to read 
+///
+///     //let pid = get_proc_by_name("SomeRandomGame");
+///     let pid = process_read_write::get_proc_by_id(pid);
+///
+///     let health = process_read_write::read_addr(pid,addr,4);
+///     println!("READING MEMORY: {:?}",health);
+/// }
+/// ```
 pub fn read_addr(pid:Pid,addr:usize,length:usize) -> Result<Vec<u8>,Error>
 {
     let mut data: Vec<u8> = vec![0;length]; 
@@ -90,6 +150,28 @@ pub fn read_addr(pid:Pid,addr:usize,length:usize) -> Result<Vec<u8>,Error>
     Ok(data[..length].to_vec())
 }
 
+/// `write_addr` is used to write a buffer of `n` bytes into the memory of process `pid` at `addr` 
+/// 
+/// # Backend
+///
+/// this function invokes the `process_vm_writev` syscall, enabling direct memory writing into a specified address in the target process. 
+/// 
+/// # Examples
+///
+/// ```
+/// use process_read_write;
+///
+/// fn main(){
+///     let pid:i32 = 1234; // id of app
+///     let addr:usize = 0x70eb856006c0; // address of value to change
+///     let new_value = [0xff,0xff,0xff,0x7f]; // the value the insert into the new address
+///
+///     //let pid = process_read_write::get_proc_by_name("SomeRandomGame");
+///     let pid = process_read_write::get_proc_by_id(pid);
+///
+///     process_read_write::write_addr(pid,addr,&new_value);
+/// }
+/// ```
 pub fn write_addr(pid:Pid,addr:usize,data:&[u8]){
     let mut _data:&[u8] = data; 
     let local_iov = IoSlice::new(&mut _data);
