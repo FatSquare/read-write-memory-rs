@@ -1,6 +1,6 @@
 [package]
 name = "process-read-write"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Squar3"]
 edition = "2021"
 description = "process-read-write allow you to read and write bytes from another processes, it also enables you to monitor a specefic process using ptrace, geting a real-time list a list of all the system calls made by that process."
