@@ -9,6 +9,17 @@ use serde_json;
 
 const SYSCALL_DATA: &str = include_str!("../data/syscall.json");
 
+/// `get_proc_by_id` will take a process id as `i32` and get the process with that id 
+/// 
+///
+/// # Examples
+///
+/// ```
+/// fn main() {
+///      let pid:i32 = 1234; // id of process 
+///      let pid = process_read_write::get_proc_by_id(pid);
+/// }
+/// ```
 pub fn get_proc_by_id(id: i32) -> Pid{
     Pid::from_raw(id)
 }
@@ -126,7 +137,7 @@ pub fn get_proc_by_name(process_name: &str) -> Pid{
 /// use process_read_write;
 ///
 /// fn main(){
-///     let pid:i32 = 1234; // id of app
+///     let pid:i32 = 1234; // id of process 
 ///     let addr:usize = 0x70eb856006c0; // address of value to read 
 ///
 ///     //let pid = get_proc_by_name("SomeRandomGame");
