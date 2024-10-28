@@ -1,25 +1,21 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
 
 use nix::{unistd::Pid,sys::{ptrace,uio::{process_vm_readv,process_vm_writev,RemoteIoVec}},Error};
 use std::io::{IoSliceMut,IoSlice};
 use sysinfo::System;
 use std::collections::HashMap;
-use std::process::Command;
-use std::os::unix::process::CommandExt;
 use nix::{self,sys::wait::waitpid};
 use std::fs::File;
 use std::io::prelude::*;
 use serde_json;
-use colored::Colorize;
 
-pub fn get_pid(id: i32) -> Pid{
+pub fn get_proc_by_id(id: i32) -> Pid{
     Pid::from_raw(id)
 }
 
 fn syscalls_list() -> HashMap<u64,String>{
     let mut map = HashMap::new();
-    let mut file = File::open("/home/sqrt/scripts/rust/game_hacking/process-read-write/syscall.json").unwrap(); 
+    let mut file = File::open("/home/sqrt/source/rust/kernel_proc/process-read-write/syscall.json").expect("Cant find file syscall.json"); 
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
     let parse: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -30,30 +26,27 @@ fn syscalls_list() -> HashMap<u64,String>{
 }
 fn printsyscall(syscall_names:&HashMap<u64,String>,regs:nix::libc::user_regs_struct,i:usize) {
     let syscall_name = syscall_names.get(&regs.orig_rax).unwrap();
-    // Printing rules
     // if syscall_name.as_str() != "process_vm_readv" {return}
-    eprint!("{}",format!("{} => ",i/2).yellow());
-    eprintln!("{} ({},{},{},..) = {}",
-        syscall_name.green(),
-        format!("{:x}",regs.rdi).blue(),
-        format!("{:x}",regs.rsi).blue(),
-        format!("{:x}",regs.rdx).blue(),
-        format!("{:x}",regs.rax).yellow()
+    eprint!("{} => ",i/2);
+    eprintln!("{} ({},{:x},{:x},..) = {}",
+        syscall_name,
+        regs.rdi,
+        regs.rsi,
+        regs.rdx,
+        regs.rax
      );
 } 
 
 pub fn watch_proc(pid:i32){
     let syscall_names = syscalls_list();
-
     let childpid = nix::unistd::Pid::from_raw(pid);
-    ptrace::attach(childpid).unwrap();
-    let _ = waitpid(childpid,None).unwrap();
-
+    ptrace::attach(childpid).expect("cant attach to pid");
+    let _ = waitpid(childpid,None).expect("timeout waiting for pid");
     let mut i = 0;
     loop{
         ptrace::syscall(childpid,None).unwrap();
         let _ = waitpid(childpid,None).unwrap();
-        let regs = ptrace::getregs(childpid).expect(&format!("{}","Error: process most likely terminated!".red()));
+        let regs = ptrace::getregs(childpid).expect(&format!("{}","Error: process most likely terminated!"));
         if i%2 == 0{
             printsyscall(&syscall_names,regs,i);
         }
@@ -62,7 +55,7 @@ pub fn watch_proc(pid:i32){
 }
 
 // maybe i should use pidof instead since its more accurate
-pub fn get_pid_by_name(process_name: &str) -> Pid{
+pub fn get_proc_by_name(process_name: &str) -> Pid{
     let s = System::new_all();
     let pid:usize;
     let procs:Vec<_> = s.processes_by_exact_name(process_name).collect();
