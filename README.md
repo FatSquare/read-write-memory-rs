@@ -1,6 +1,6 @@
 # read-write-memory-rs
 
-read-wirte-memory-rs is a fast memory read/write, capable of reading and writing memory to any process <br>
+read-write-memory-rs is a fast memory read/write, capable of reading and writing memory to any process <br>
 
 it also allow process inspection. you can't attach it to a process and it will give you a real-time list of all the system calls that process made.
 
